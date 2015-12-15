@@ -1,3 +1,4 @@
+.rebar
 *.beam
 ebin
 .eunit
