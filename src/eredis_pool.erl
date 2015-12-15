@@ -137,8 +137,7 @@ transaction(PoolName, Fun) when is_function(Fun) ->
                     eredis:q(C, ["EXEC"])
                 catch Klass:Reason ->
                         {ok, <<"OK">>} = eredis:q(C, ["DISCARD"]),
-                        io:format("Error in redis transaction. ~p:~p", 
-                                  [Klass, Reason]),
+                        io:fwrite(standard_error, ?MODULE_STRING ": Error in redis transaction ~p:~p", [Klass, Reason]),
                         {Klass, Reason}
                 end
         end,
