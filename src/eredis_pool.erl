@@ -17,7 +17,7 @@
 
 %% API
 -export([start/0, stop/0]).
--export([q/2, q/3, qp/2, qp/3, transaction/2,
+-export([q/2, q/3, qp/2, qp/3, transaction/2, watch_transaction/3,
          create_pool/2, create_pool/3, create_pool/4, create_pool/5,
          create_pool/6, create_pool/7, 
          delete_pool/1]).
@@ -143,3 +143,40 @@ transaction(PoolName, Fun) when is_function(Fun) ->
         end,
 
     poolboy:transaction(PoolName, F).    
+
+-spec watch_transaction(PoolName::atom(), Keys::[string()|binary()|atom()], Fun::fun((pid()) -> list())) -> {ok, undefined|binary()|[binary()]} | {error, Reason::binary()|term()}.
+watch_transaction(PoolName, [_|_] = Keys, Fun) when is_function(Fun, 1) ->
+    poolboy:transaction(PoolName,
+                        fun(C) ->
+                            case eredis:q(C, ["WATCH"|Keys]) of
+                                {ok, <<"OK">>} ->
+                                    try Fun(C) of
+                                        [_|_] = R1 ->
+                                            {ok, <<"OK">>} = eredis:q(C, ["MULTI"]),
+                                            R2 = eredis:qp(C, R1),
+                                            case lists:all(fun({ok, <<"QUEUED">>}) -> true;
+                                                              (_) -> false
+                                                           end, R2) of
+                                                true -> eredis:q(C, ["EXEC"]);
+                                                _ ->
+                                                    {ok, <<"OK">>} = eredis:q(C, ["DISCARD"]),
+                                                    io:fwrite(standard_error,
+                                                              ?MODULE_STRING ": Error in redis watch transaction: ~p~n",
+                                                              [R2]),
+                                                    {error, R2}
+                                            end;
+                                        [] ->
+                                            {ok, <<"OK">>} = eredis:q(C, ["UNWATCH"]),
+                                            {ok, []};
+                                        E ->
+                                            io:fwrite(standard_error,
+                                                      ?MODULE_STRING ": Error in redis watch: ~p~n",
+                                                      [E]),
+                                            {error, E}
+                                    catch Class:Reason ->
+                                        {ok, <<"OK">>} = eredis:q(C, ["UNWATCH"]),
+                                        {Class, Reason}
+                                    end;
+                                E -> E
+                            end
+                        end).
