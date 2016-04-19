@@ -42,8 +42,11 @@ stop() ->
 create_pool(PoolName, Size) ->
     eredis_pool_sup:create_pool(PoolName, Size, []).
 
--spec(create_pool(PoolName::atom(), Size::integer(), Host::string()) -> 
+-spec(create_pool(PoolName::atom(), Size::integer(), Host::string()|[{OptionName::atom(), OptionValue::term()}]) ->
              {ok, pid()} | {error,{already_started, pid()}}).
+
+create_pool(PoolName, Size, [{_, _}|_] = Options) ->
+    eredis_pool_sup:create_pool(PoolName, Size, Options);
 
 create_pool(PoolName, Size, Host) ->
     eredis_pool_sup:create_pool(PoolName, Size, [{host, Host}]).
