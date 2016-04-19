@@ -20,8 +20,14 @@
 %% ===================================================================
 
 start_link() ->
-    {ok, Pools} = application:get_env(eredis_pool, pools),
-    {ok, GlobalOrLocal} = application:get_env(eredis_pool, global_or_local),
+    Pools = case application:get_env(eredis_pool, pools) of
+                {ok, P} -> P;
+                undefined -> []
+            end,
+    GlobalOrLocal = case application:get_env(eredis_pool, global_or_local) of
+                        {ok, GoL} -> GoL;
+                        undefined -> local
+                    end,
     start_link(Pools, GlobalOrLocal).
 
 start_link(Pools, GlobalOrLocal) ->
@@ -47,10 +53,10 @@ create_pool(PoolName, Size, Options) ->
 create_pool(GlobalOrLocal, PoolName, Size, Options) 
   when GlobalOrLocal =:= local;
        GlobalOrLocal =:= global ->
-
-    SizeArgs = [{size, Size}, {max_overflow, 10}],
-    PoolArgs = [{name, {GlobalOrLocal, PoolName}}, {worker_module, eredis}],
-    PoolSpec = poolboy:child_spec(PoolName, PoolArgs ++ SizeArgs, Options),
+    PoolSpec = poolboy:child_spec(PoolName,
+                                  [{name, {GlobalOrLocal, PoolName}}, {worker_module, eredis},
+                                   {size, Size}, {max_overflow, proplists:get_value(max_overflow, Options, 10)}],
+                                  lists:keydelete(max_overflow, 1, Options)),
 
     supervisor:start_child(?MODULE, PoolSpec).
 
